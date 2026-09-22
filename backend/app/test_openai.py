@@ -34,7 +34,7 @@ def generate_questions(topic: str, difficulty: int, count: int) -> list[dict]:
     """
 
     response = client.responses.create(
-        model="gpt-5.6-luna",
+        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         input=prompt
     )
 
