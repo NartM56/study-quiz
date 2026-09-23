@@ -17,6 +17,16 @@ CREATE TABLE topics (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ,
+    mode VARCHAR(20) NOT NULL DEFAULT 'adaptive' CHECK (mode IN ('adaptive', 'review', 'practice')),
+    topic_ids UUID[],
+    target_count SMALLINT
+);
+
 CREATE TABLE questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     body TEXT NOT NULL,
@@ -26,6 +36,7 @@ CREATE TABLE questions (
     explanation TEXT,
     difficulty SMALLINT NOT NULL DEFAULT 1 CHECK (difficulty BETWEEN 1 AND 5),
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -34,16 +45,6 @@ CREATE TABLE question_topics (
     question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     PRIMARY KEY (question_id, topic_id)
-);
-
-CREATE TABLE sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ended_at TIMESTAMPTZ,
-    mode VARCHAR(20) NOT NULL DEFAULT 'adaptive' CHECK (mode IN ('adaptive', 'review', 'practice')),
-    topic_ids UUID[],
-    target_count SMALLINT
 );
 
 CREATE TABLE attempts (

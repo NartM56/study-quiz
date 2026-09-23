@@ -82,6 +82,11 @@ class Question(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    session_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -91,6 +96,7 @@ class Question(Base):
     )
 
     creator: Mapped[Optional[User]] = relationship(back_populates="questions")
+    session: Mapped[Optional["Session"]] = relationship(back_populates="questions")
     topic_links: Mapped[list["QuestionTopic"]] = relationship(back_populates="question", cascade="all, delete-orphan")
     attempts: Mapped[list["Attempt"]] = relationship(back_populates="question", cascade="all, delete-orphan")
 
@@ -133,6 +139,7 @@ class Session(Base):
 
     user: Mapped[User] = relationship(back_populates="sessions")
     attempts: Mapped[list["Attempt"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    questions: Mapped[list["Question"]] = relationship(back_populates="session")
 
 
 class Attempt(Base):

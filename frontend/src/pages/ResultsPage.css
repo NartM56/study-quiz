@@ -1,0 +1,15 @@
+.results-card {
+  text-align: center;
+}
+
+.results-score {
+  font-size: 56px;
+  font-weight: 600;
+  margin: 8px 0;
+  color: var(--accent);
+}
+
+.results-detail {
+  margin: 0 0 24px;
+  color: var(--text);
+}

@@ -1,0 +1,82 @@
+.quiz-page {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.quiz-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
+}
+
+.quiz-card h1 {
+  font-size: 28px;
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+.quiz-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quiz-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.quiz-form input,
+.quiz-form select {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.quiz-form input:focus-visible,
+.quiz-form select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent-border);
+}
+
+.quiz-form button {
+  font: inherit;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.quiz-form button:hover {
+  opacity: 0.9;
+}
+
+.quiz-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quiz-error {
+  margin: 0;
+  font-size: 14px;
+  color: #dc2626;
+}
