@@ -9,43 +9,46 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 MAX_ATTEMPTS = 2
 
-# Structured Outputs strict mode guarantees valid JSON, every field present,
-# and correct_answer being one of a/b/c/d — but NOT the array length, so the
-# question count still needs the retry+check below. Options are modeled as
-# four named fields (not an array) specifically so "exactly 4 options" is an
-# object-shape guarantee too, since strict mode doesn't support minItems/maxItems.
-QUESTION_JSON_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "questions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "body": {"type": "string"},
-                    "option_a": {"type": "string"},
-                    "option_b": {"type": "string"},
-                    "option_c": {"type": "string"},
-                    "option_d": {"type": "string"},
-                    "correct_answer": {"type": "string", "enum": ["a", "b", "c", "d"]},
-                    "explanation": {"type": "string"},
+# Options are modeled as four named fields (not an array) so "exactly 4
+# options" is a plain object-shape guarantee, which strict mode reliably
+# enforces. minItems/maxItems on the questions array is unconfirmed in docs,
+# but tested live and matched exactly across multiple trials — kept as a
+# genuine constraint here, with the count check below as a safety net either way.
+def _build_schema(count: int) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "minItems": count,
+                "maxItems": count,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "body": {"type": "string"},
+                        "option_a": {"type": "string"},
+                        "option_b": {"type": "string"},
+                        "option_c": {"type": "string"},
+                        "option_d": {"type": "string"},
+                        "correct_answer": {"type": "string", "enum": ["a", "b", "c", "d"]},
+                        "explanation": {"type": "string"},
+                    },
+                    "required": [
+                        "body",
+                        "option_a",
+                        "option_b",
+                        "option_c",
+                        "option_d",
+                        "correct_answer",
+                        "explanation",
+                    ],
+                    "additionalProperties": False,
                 },
-                "required": [
-                    "body",
-                    "option_a",
-                    "option_b",
-                    "option_c",
-                    "option_d",
-                    "correct_answer",
-                    "explanation",
-                ],
-                "additionalProperties": False,
             },
         },
-    },
-    "required": ["questions"],
-    "additionalProperties": False,
-}
+        "required": ["questions"],
+        "additionalProperties": False,
+    }
 
 
 class GeneratedOption(BaseModel):
@@ -91,7 +94,7 @@ def _generate_once(topic: str, difficulty: int, count: int) -> list[GeneratedQue
                 "format": {
                     "type": "json_schema",
                     "name": "quiz_questions",
-                    "schema": QUESTION_JSON_SCHEMA,
+                    "schema": _build_schema(count),
                     "strict": True,
                 }
             },

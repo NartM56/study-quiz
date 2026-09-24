@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:15
+    container_name: study_quiz_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: study_quiz
+    ports:
+      - "5433:5432"
+    volumes:
+      - study_quiz_db_data:/var/lib/postgresql/data
+
+volumes:
+  study_quiz_db_data:
