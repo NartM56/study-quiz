@@ -36,9 +36,11 @@ def create_quiz(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    print("got here")
     topic = get_or_create_topic(db, request.topic)
 
     try:
+        print(f"Trying to generate questions for topic '{request.topic}' with difficulty {request.difficulty} and count {request.question_count}")
         generated_questions = generate_questions(
             request.topic, request.difficulty, request.question_count
         )
@@ -53,6 +55,8 @@ def create_quiz(
     )
     db.add(session)
     db.flush()  # assigns session.id without committing yet
+    
+    print(f"Created session with ID {session.id}")
 
     questions = []
     for q in generated_questions:

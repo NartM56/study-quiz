@@ -42,6 +42,7 @@ export function NewQuizPage() {
         difficulty: Number(quizDifficulty),
         question_count: questionAmount,
       });
+      console.log("Quiz created:", data);
       navigate(`/quiz/${data.session_id}`, {
         state: { questions: data.questions },
       });

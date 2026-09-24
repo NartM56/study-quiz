@@ -7,6 +7,46 @@ from app.core.config import settings
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+MAX_ATTEMPTS = 2
+
+# Structured Outputs strict mode guarantees valid JSON, every field present,
+# and correct_answer being one of a/b/c/d — but NOT the array length, so the
+# question count still needs the retry+check below. Options are modeled as
+# four named fields (not an array) specifically so "exactly 4 options" is an
+# object-shape guarantee too, since strict mode doesn't support minItems/maxItems.
+QUESTION_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "body": {"type": "string"},
+                    "option_a": {"type": "string"},
+                    "option_b": {"type": "string"},
+                    "option_c": {"type": "string"},
+                    "option_d": {"type": "string"},
+                    "correct_answer": {"type": "string", "enum": ["a", "b", "c", "d"]},
+                    "explanation": {"type": "string"},
+                },
+                "required": [
+                    "body",
+                    "option_a",
+                    "option_b",
+                    "option_c",
+                    "option_d",
+                    "correct_answer",
+                    "explanation",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["questions"],
+    "additionalProperties": False,
+}
+
 
 class GeneratedOption(BaseModel):
     id: str
@@ -24,54 +64,80 @@ class QuestionGenerationError(Exception):
     """Raised when OpenAI fails, or returns something we can't safely use."""
 
 
-def generate_questions(topic: str, difficulty: int, count: int) -> list[GeneratedQuestion]:
-    prompt = f"""
-    Generate {count} multiple choice questions about "{topic}"
+def _build_prompt(topic: str, difficulty: int, count: int) -> str:
+    return f"""
+    Generate multiple choice questions about "{topic}"
     at difficulty level {difficulty} (1 = easy, 5 = hard).
 
-    Each question must have exactly 4 answer choices.
-
-    Return ONLY a JSON array in this format:
-
-    [
-        {{
-            "body": "What is ...?",
-            "options": [
-                {{"id": "a", "text": "..."}},
-                {{"id": "b", "text": "..."}},
-                {{"id": "c", "text": "..."}},
-                {{"id": "d", "text": "..."}}
-            ],
-            "correct_answer": "a",
-            "explanation": "Because ..."
-        }}
-    ]
+    IMPORTANT: Return EXACTLY {count} questions in the "questions" array —
+    not {count - 1}, not {count + 1}. Count them before responding.
     """
 
+
+def _generate_once(topic: str, difficulty: int, count: int) -> list[GeneratedQuestion]:
+    prompt = _build_prompt(topic, difficulty, count)
+
+    # ~300 tokens/question covers body + 4 options + explanation + JSON overhead;
+    # without an explicit cap, larger requests are more exposed to whatever
+    # default limit the API applies and can get cut off mid-generation.
+    max_output_tokens = max(1024, count * 300)
+
     try:
-        response = client.responses.create(model=settings.OPENAI_MODEL, input=prompt)
+        response = client.responses.create(
+            model=settings.OPENAI_MODEL,
+            input=prompt,
+            max_output_tokens=max_output_tokens,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "quiz_questions",
+                    "schema": QUESTION_JSON_SCHEMA,
+                    "strict": True,
+                }
+            },
+        )
     except Exception as e:
         raise QuestionGenerationError(f"OpenAI request failed: {e}") from e
 
-    try:
-        raw = json.loads(response.output_text)
-    except json.JSONDecodeError as e:
-        raise QuestionGenerationError(f"Model returned invalid JSON: {e}") from e
+    output_text = response.output_text
+    print(output_text)
+    if not output_text:
+        status = getattr(response, "status", "unknown")
+        incomplete_reason = getattr(
+            getattr(response, "incomplete_details", None), "reason", None
+        )
+        raise QuestionGenerationError(
+            f"OpenAI returned an empty response (status={status}, "
+            f"incomplete_reason={incomplete_reason})"
+        )
 
-    if not isinstance(raw, list):
-        raise QuestionGenerationError("Model response was not a JSON array")
+    try:
+        raw = json.loads(output_text)
+    except json.JSONDecodeError as e:
+        raise QuestionGenerationError(
+            f"Model returned invalid JSON: {e} — raw response started with {output_text[:200]!r}"
+        ) from e
+
+    raw_questions = raw.get("questions") if isinstance(raw, dict) else None
+    if not isinstance(raw_questions, list):
+        raise QuestionGenerationError("Model response did not contain a 'questions' array")
 
     questions: list[GeneratedQuestion] = []
-    for item in raw:
+    for item in raw_questions:
         try:
-            question = GeneratedQuestion.model_validate(item)
-        except ValidationError as e:
+            question = GeneratedQuestion(
+                body=item["body"],
+                options=[
+                    GeneratedOption(id="a", text=item["option_a"]),
+                    GeneratedOption(id="b", text=item["option_b"]),
+                    GeneratedOption(id="c", text=item["option_c"]),
+                    GeneratedOption(id="d", text=item["option_d"]),
+                ],
+                correct_answer=item["correct_answer"],
+                explanation=item["explanation"],
+            )
+        except (KeyError, ValidationError) as e:
             raise QuestionGenerationError(f"Malformed question object: {e}") from e
-
-        if len(question.options) != 4:
-            raise QuestionGenerationError("Question did not have exactly 4 options")
-        if question.correct_answer not in {opt.id for opt in question.options}:
-            raise QuestionGenerationError("correct_answer does not match any option id")
 
         questions.append(question)
 
@@ -79,3 +145,19 @@ def generate_questions(topic: str, difficulty: int, count: int) -> list[Generate
         raise QuestionGenerationError(f"Expected {count} questions, got {len(questions)}")
 
     return questions
+
+
+def generate_questions(topic: str, difficulty: int, count: int) -> list[GeneratedQuestion]:
+    """Ask OpenAI for `count` questions, retrying once on any failure —
+    empty output or a wrong question count are typically one-off model
+    imprecision rather than a deterministic bug."""
+    last_error: QuestionGenerationError | None = None
+
+    for _ in range(MAX_ATTEMPTS):
+        try:
+            return _generate_once(topic, difficulty, count)
+        except QuestionGenerationError as e:
+            last_error = e
+
+    assert last_error is not None
+    raise last_error
