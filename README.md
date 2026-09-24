@@ -11,6 +11,10 @@ The long-term goal is an **adaptive study engine** — generate → answer → t
 - One-question-at-a-time quiz flow with instant correct/incorrect feedback and explanations
 - Final score per quiz, with a full history and all-time stats (quizzes taken, overall accuracy, questions answered)
 
+## Demo
+
+https://github.com/user-attachments/assets/c48efef9-98aa-44ac-b83a-f10a38f1c74d
+
 ## Tech stack
 
 **Backend** — FastAPI, SQLAlchemy + PostgreSQL, JWT auth (`pyjwt` + `passlib`/`bcrypt`), OpenAI API (Structured Outputs for reliable question generation)
